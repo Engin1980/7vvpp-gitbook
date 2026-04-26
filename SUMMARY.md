@@ -3,6 +3,10 @@
 * [Intro](README.md)
 * [Blokující fronta - Producent -> Konzument](blokujici-fronta-producent-greater-than-konzument.md)
 
+## Běžné datové typy
+
+* [Semaphore](bezne-datove-typy/semaphore.md)
+
 ## Neblokující přístupy
 
 * [Princip, CAS operace](neblokujici-pristupy/princip-cas-operace.md)
