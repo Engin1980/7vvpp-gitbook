@@ -6,6 +6,9 @@
 ## Běžné datové typy
 
 * [Semaphore](bezne-datove-typy/semaphore.md)
+* [CountDownLatch](bezne-datove-typy/countdownlatch.md)
+* [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
+* [Phaser](bezne-datove-typy/phaser.md)
 
 ## Neblokující přístupy
 
