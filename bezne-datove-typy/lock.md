@@ -6,9 +6,30 @@
 
 ## Příklad
 
-...
+Uvažujme systém, kde potřebujeme model/třídu `ConfigStore` realizující mechanismus **sdíleného úložiště konfigurace v paměti**, typicky používaný v serverové nebo paralelní aplikaci. Jeho hlavním účelem je umožnit **bezpečný a konzistentní přístup k datům z více vláken**.
+
+Typické vlastnosti a požadavky na takovou komponentu jsou:
+
+* konfigurace je **čtena velmi často** (např. při zpracování každého requestu),
+* konfigurace je **měněna relativně zřídka** (reload, refresh, hot‑config),
+* čtení musí být **rychlé a odolné vůči zablokování**,
+* zápis musí být **atomický a konzistentní**,
+* systém by měl ideálně umožnit **degradaci chování** (např. vrátit default, když konfigurace není dočasně dostupná),
+* v produkčním prostředí je důležitá **predikovatelná latence** a vyhnutí se hromadění čekajících vláken.
+
+`ConfigStore` je tedy zástupný příklad pro celou třídu problémů: _sdílený stav, hodně čtení, málo zápisů, více vláken, tlak na latenci a stabilitu_.
+
+Následující sekce vysvětlují jednotlivé přístupy, které lze při řešení v Java využít.
 
 ## Implementace příkladu přes 'synchronized'
+
+Přístup přes `synchronized` řeší souběžný přístup ke sdíleným datům tím, že serializuje všechny operace pomocí jednoho implicitního zámku, bez možnosti řídit čekání, latenci nebo fallback chování.
+
+* Řeší základní problém **vzájemného vyloučení** při přístupu ke sdíleným datům.
+* Zajišťuje korektnost a paměťovou viditelnost bez nutnosti dalšího kódu.
+* Neřeší kontrolu čekání: pokud je zámek obsazen, vlákno **čeká neomezeně dlouho**.
+* Neumožňuje rozlišit čtení a zápis ani reagovat na přetížení systému.
+* Vhodné jako výchozí, demonstrační nebo velmi jednoduché řešení, nikoliv pro latency‑citlivé scénáře.
 
 ```java
 import java.util.HashMap;
@@ -112,6 +133,14 @@ Zobrazit více řádků
 * špatná škálovatelnost
 
 ## Implementace příkladu přes ReentrantLock
+
+Přístup pomocí `ReentrantLock` poskytuje explicitní řízení zámku, které umožňuje pokus o uzamčení, časové omezení čekání a přerušitelnost, čímž dává aplikaci kontrolu nad latencí a degradačním chováním.
+
+* Řeší problém **nekontrolovaného čekání** zavedením explicitní práce se zámkem.
+* Umožňuje nastavit **timeout**, zkusit zámek získat podmíněně a při neúspěchu použít fallback.
+* Umožňuje **přerušitelné čekání**, což je důležité pro správné rušení úloh.
+* Stále pracuje s jedním exkluzivním zámkem, takže **čtenáři se blokují navzájem**.
+* Hodí se tam, kde je důležitá kontrola nad latencí, ale struktura dat je jednoduchá.
 
 ```java
 import java.util.HashMap;
@@ -250,6 +279,14 @@ Zobrazit více řádků
 
 ## Implementace příkladu přes StampedLock
 
+Přístup pomocí `StampedLock` umožňuje extrémně rychlé, neblokující čtení pomocí optimistického přístupu s následnou validací, za cenu vyšší složitosti a absence reentrance i timeoutu.
+
+* Řeší problém **latence čtení způsobené zamykáním**.
+* Umožňuje **optimistické (neblokující) čtení**, které proběhne bez zamykání a pouze se validuje.
+* Čtení je extrémně rychlé a neblokuje se ani při probíhajícím zápisu.
+* Přináší vyšší složitost, nereentranci a nutnost ruční validace.
+* Hodí se tam, kde čtení výrazně převažuje nad zápisem a systém snese fallback při konfliktu.
+
 ```java
 import java.util.HashMap;
 import java.util.Map;
@@ -347,6 +384,14 @@ To je:
 * ideální pro vysoký throughput
 
 ## Implementace příkladu přes ReadWriteLock
+
+Přístup pomocí `ReadWriteLock` odděluje čtení od zápisu tak, že umožňuje paralelní čtení více vlákny a současně zajišťuje exkluzivní, konzistentní zápis, čímž zlepšuje škálovatelnost u read‑heavy dat.
+
+* Řeší problém **špatné škálovatelnosti při častém čtení**.
+* Odděluje přístup pro čtení a zápis: více čtenářů může pracovat paralelně.
+* Stále zachovává možnost **timeoutu a fallbacku**.
+* Zápis je exkluzivní a blokuje další čtení, aby byla zachována konzistence.
+* Vhodné pro read‑heavy struktury, kde potřebuješ konzistentní snapshot a kontrolu čekání.
 
 ```java
 import java.util.HashMap;
@@ -467,7 +512,7 @@ Thread D: getOrDefault(timeout=50ms) → default
 
 ## Příklad - shrnutí
 
-### Shrnutí: `synchronized` vs `ReentrantLock` vs `ReadWriteLock` vs `StampedLock`
+Shrnutí: `synchronized` vs `ReentrantLock` vs `ReadWriteLock` vs `StampedLock`
 
 | Vlastnost / Nástroj          | `synchronized`            | `ReentrantLock`    | `ReadWriteLock` | `StampedLock`  |
 | ---------------------------- | ------------------------- | ------------------ | --------------- | -------------- |
@@ -504,3 +549,141 @@ Významy řádků:
 * **Typická latence** – obvyklé chování z hlediska čekací doby vláken při souběhu; nejde o absolutní čísla, ale o charakteristický trend
 * **Podpora downgrade / upgrade** – možnost přecházet mezi méně restriktivním a více restriktivním režimem synchronizace během jedné operace
 * **Typické použití** – okruh problémů, pro které je daný synchronizační přístup přirozeně vhodný z hlediska výkonu, složitosti a správnos
+
+## Bonus - Implementace přes CAS/neblokující
+
+Přístup přes CAS (Compare‑And‑Swap) řeší synchronizaci tím, že atomicky vyměňuje celý stav bez zámků, takže čtení ani zápisy nikdy neblokují a systém má konstantní, predikovatelnou latenci.
+
+* Řeší problém synchronizace **úplným odstraněním zámků**.
+* Stav je reprezentován jako **neměnitelný objekt**, který je atomicky nahrazován.
+* Čtení je vždy okamžité, bez čekání a bez rizika deadlocku.
+* Zápis je atomická výměna reference; čtenáři nikdy nejsou blokováni.
+* Nejvhodnější řešení pro konfiguraci a metadata, kde:
+  * se zapisuje zřídka,
+  * nevadí vytvoření nové instance dat,
+  * je klíčová jednoduchost a predikovatelná latence.
+
+```java
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+public class ConfigStore {
+
+    // Atomická reference na immutable snapshot
+    private final AtomicReference<Map<String, String>> config =
+            new AtomicReference<>(Map.of());
+
+    /**
+     * Non-blocking čtení – vždy okamžité
+     */
+    public String getOrDefault(String key, String defaultValue) {
+        return config.get().getOrDefault(key, defaultValue);
+    }
+
+    /**
+     * Non-blocking reload přes CAS
+     */
+    public void reload(Map<String, String> newConfig) {
+        // vytvoříme immutable snapshot
+        Map<String, String> snapshot = Map.copyOf(newConfig);
+
+        // atomicky vyměníme celý stav
+        config.set(snapshot);
+        // (CAS zde není cyklický, protože write nemá konfliktovou logiku)
+    }
+}
+```
+
+### Proč je to **opravdu non‑blocking**
+
+#### Čtení
+
+* ✅ žádný lock
+* ✅ žádný CAS
+* ✅ jen volatile read reference
+* O(1), konstantní latence
+
+#### Zápis
+
+* ✅ jeden atomický store reference
+* žádné blokování čtenářů
+* žádná synchronizace mezi čtením a zápisem
+
+➡️ **readers nikdy nečekají**
+
+***
+
+### Kde je CAS?
+
+* `AtomicReference.set()` je **atomic store**
+* z pohledu JVM je to:
+  * garantovaná atomicita
+  * **happens‑before** mezi writerem a čtenářem
+* pokud bys řešil **konfliktní zápisy**, použiješ `compareAndSet`
+
+***
+
+### Varianta s explicitním `compareAndSet` (více writerů)
+
+Pokud bys **musel řešit souběžné reloady**:
+
+```java
+public void reload(Map<String, String> newConfig) {
+    Map<String, String> snapshot = Map.copyOf(newConfig);
+
+    while (true) {
+        Map<String, String> current = config.get();
+        if (config.compareAndSet(current, snapshot)) {
+            return;
+        }
+        // jiný writer mezitím změnil stav → retry
+    }
+}
+```
+
+Toto řešení je:
+
+* stále **bez locků**
+* retry jen při souběhu writerů
+* readers pořád 100 % non‑blocking
+
+#### Výhody
+
+* ✅ deterministickou latenci
+* ✅ žádné deadlocky
+* ✅ žádné starvation
+* ✅ škáluje perfektně s počtem čtenářů
+* ✅ jednoduchá mentální model
+
+#### Nevýhody
+
+* ❌ zápis je „výměna celého stavu“
+* ❌ při reloadu:
+  * nové objekty
+  * krátký GC tlak
+* ❌ nelze dělat „postupné zápisy“
+
+***
+
+### Kdy je tohle **nejlepší možné řešení**
+
+✅ konfigurace\
+✅ feature flags\
+✅ routing rules\
+✅ in‑memory metadata\
+✅ read‑mostly data\
+✅ systémy s nízkou tolerancí latence
+
+Ve většině backendů je toto lepší než jakýkoliv přístup postavený nad zámky.
+
+***
+
+### Srovnání s předchozími řešeními
+
+| Kritérium       | Locky    | CAS snapshot        |
+| --------------- | -------- | ------------------- |
+| Blokování       | ano      | ❌                   |
+| Latence         | proměnná | konstantní          |
+| Komplexita      | vyšší    | nižší               |
+| Read throughput | omezený  | prakticky neomezený |
+| Deadlock risk   | ano      | ❌                   |
