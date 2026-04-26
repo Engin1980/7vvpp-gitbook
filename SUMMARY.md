@@ -5,6 +5,7 @@
 
 ## Běžné datové typy
 
+* [Lock](bezne-datove-typy/lock.md)
 * [Semaphore](bezne-datove-typy/semaphore.md)
 * [CountDownLatch](bezne-datove-typy/countdownlatch.md)
 * [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
