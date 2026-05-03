@@ -11,6 +11,12 @@
 * [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
 * [Phaser](bezne-datove-typy/phaser.md)
 
+## Future + Executor
+
+***
+
+* [Demo](demo.md)
+
 ## Neblokující přístupy
 
 * [Princip, CAS operace](neblokujici-pristupy/princip-cas-operace.md)
