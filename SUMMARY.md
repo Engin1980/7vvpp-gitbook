@@ -16,6 +16,7 @@
 ***
 
 * [Executor - ForkJoinPool](executor-forkjoinpool.md)
+* [Future](future.md)
 * [Demo](demo.md)
 
 ## Neblokující přístupy
