@@ -20,7 +20,7 @@
 ***
 
 * [Executor - ForkJoinPool](executor-forkjoinpool.md)
-* [Future](future.md)
+* [Future, CompletableFuture](future-completablefuture.md)
 * [Příklad](priklad.md)
 
 ## Neblokující přístupy
