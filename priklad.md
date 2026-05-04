@@ -388,6 +388,103 @@ dataProvider.getServiceOverviewStateAsync()  // <- vrať overview
           return ret;
         })
         .join();
+      
 ```
 {% endcode %}
 
+Kompletní kód k této implementaci: [https://github.com/Engin1980/7vvpp-futures-example/tree/b1f7a2ee35310209ac864518f3600f4261ccf17a](https://github.com/Engin1980/7vvpp-futures-example/tree/b1f7a2ee35310209ac864518f3600f4261ccf17a).
+
+### Synchronizované překreslení výsledku
+
+V předchozí implementaci se čistě hypoteticky může stát, že dva navrácené stavy v jednu chvíli způsobí současné vyvolání `printCurrent()` a nekoretní zobrazení výsledku.
+
+Nejjednodušším řešením je zajistit, že se vypisování výsledku bude vždy provádět jen v jednom vlákně. Pro tuto funkcionalitu si vytvoříme vlastní executor - třídu, která spouští úlohy. Její nastavení bude říkat, že v jednu chvíli může běžet jen právě jedna úloha:
+
+{% code lineNumbers="true" %}
+```java
+ExecutorService uiExecutor = Executors.newSingleThreadExecutor()
+```
+{% endcode %}
+
+Protože se jedná o zdroj, který se může uzavírat, použijeme v Javě syntax _try-with-resources_:
+
+{% code lineNumbers="true" %}
+```java
+try (ExecutorService uiExecutor = Executors.newSingleThreadExecutor()) {
+  // ... získávání a aktualizace dat
+}
+```
+{% endcode %}
+
+Pak musíme už jen zajistit, že se funkcionalita výpisu zavolá v tomto executoru:
+
+{% code lineNumbers="true" %}
+```java
+CompletableFuture.runAsync(Program::printCurrent, uiExecutor).join();
+```
+{% endcode %}
+
+{% hint style="info" %}
+Jde-li zařadit volání jednoduše do sekvence (například pokud nepotřebujeme předávat dále výsledek), lze jednoduše vyvolat také:
+
+```java
+.thenRunAsync(Program::printCurrent, uiExecutor)
+```
+
+Funkce musí být s postfixem `Async`, tak se totiž vynutí vyvolání v jiném vlákně a jiném (konkrétním) executor objektu.
+{% endhint %}
+
+Kompletní kód po úpravě je na: [https://github.com/Engin1980/7vvpp-futures-example/blob/bd154d6d8a5b554dec7231c6914477cf49626af3/src/eng/futures/Program.java](https://github.com/Engin1980/7vvpp-futures-example/blob/bd154d6d8a5b554dec7231c6914477cf49626af3/src/eng/futures/Program.java).
+
+### Asynchronní synchronizované překreslení výsledků
+
+Dalším jevem je, že aktuálně překreslování výsledku brzí získávání dalších dat. Před prováděním dalších požadavků na získání dat přes `DataProvider` není třeba čekat na dokončení výpisu na konzoli.
+
+Proto upravíme volání tak, aby bylo vúči dalším krokům neblokující. Toho lze docílit jednoduchým odstraněním `.join()` postfixu u jednotlivých `CompletableFuture`:
+
+{% code lineNumbers="true" %}
+```java
+CompletableFuture.runAsync(Program::printCurrent, uiExecutor); // <- zde chybí join();
+```
+{% endcode %}
+
+Změna je to drobná, proto jen odkaz na kód po úpravě: [https://github.com/Engin1980/7vvpp-futures-example/blob/5acc9277dd8b0ce3e0fee80f3575906f9421d517/src/eng/futures/Program.java](https://github.com/Engin1980/7vvpp-futures-example/blob/5acc9277dd8b0ce3e0fee80f3575906f9421d517/src/eng/futures/Program.java).
+
+### Bonus: Odlišení callbacků s úpravou modelu od požadavků na vykreslení
+
+Poslední drobnou úpravou je sémantická úprava callbacků. V callbacku se nám typicky míchají stavy zpracování dat se stavem překreslení, což není logicky správně:
+
+{% code lineNumbers="true" %}
+```java
+.thenApply(res -> {
+      servicesOverview = new ServicesOverview(); // <- úprava stavu
+      servicesOverview.setSource(res.source()); // <- úprava stavu
+      servicesOverview.setState(res.state()); // <- úprava stavu
+      CompletableFuture.runAsync(Program::printCurrent, uiExecutor); // <- překreslení
+      return res;
+    })
+```
+{% endcode %}
+
+Tyto operace můžeme rozbít pro lepší čitelnost:
+
+{% code lineNumbers="true" %}
+```java
+.thenApply(res -> { // <- úprava stavu
+        servicesOverview = new ServicesOverview();
+        servicesOverview.setSource(res.source());
+        servicesOverview.setState(res.state());
+        return res;
+      })
+      .thenApply(res -> { // <- překreslení
+        CompletableFuture.runAsync(Program::printCurrent, uiExecutor);
+        return res;
+      })
+```
+{% endcode %}
+
+Výsledný kód je dostupný na: [https://github.com/Engin1980/7vvpp-futures-example/blob/2550b9c3498fc2abf6296700ba6d99a1ec37c980/src/eng/futures/Program.java](https://github.com/Engin1980/7vvpp-futures-example/blob/2550b9c3498fc2abf6296700ba6d99a1ec37c980/src/eng/futures/Program.java).
+
+## Shrnutí
+
+Výsledná implementace je dostupná na linku uvedeném v záhlaví stránky.
