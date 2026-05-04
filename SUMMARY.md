@@ -11,6 +11,10 @@
 * [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
 * [Phaser](bezne-datove-typy/phaser.md)
 
+## Virtuální vlákna
+
+* [Simple Demo](virtualni-vlakna/simple-demo.md)
+
 ## Future + Executor
 
 ***
