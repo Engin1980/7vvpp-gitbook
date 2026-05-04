@@ -4,7 +4,9 @@
 
 ## Motivace
 
-TODO
+Cílem je demonstrovat chování, kdy se sekvence operací, které se provádějí za sebou, volá asynchronním způsobem. Bude demonstrováno, jakým způsobem se sekvence operací provede synchronně a jakým způsobem se totéž provede asynchronně s využitím `CompletableFuture`.
+
+Konkrétně příklad ukazuje, jakým způsobem se po inicializaci stáhne informace o poskytovateli služeb, následně stáhnou jeho služby a poté postupně aktualizuje stav jednotlivých služeb. Je demonstrováno, jak v sekvenčním řešením se postupně volání provádějí za sebou, kdežto v asynchronním řešení se jednotlivá volání řetězí do sestavené sekvence operací navzájem propojených operací.
 
 ## Prerekvizity
 
