@@ -1,6 +1,164 @@
-# Demo
+# Příklad
+
+## Motivace
 
 TODO
+
+## Prerekvizity
+
+Projekt používá anotace `Lombok`.
+
+V projektu se použije jednoduchá funkce vypisující info o aktuálním stavu modelu:
+
+{% code lineNumbers="true" %}
+```java
+  private static void printCurrent() {
+    for (int i = 0; i < 20; i++) {
+      System.out.println();
+    }
+
+    if (servicesOverview == null) {
+      System.out.println("No data yet...");
+    } else {
+      System.out.println("Source: " + servicesOverview.getSource());
+      System.out.println("State: " + servicesOverview.getState());
+      if (servicesOverview.getServices() == null)
+        System.out.println("\tNo services yet");
+      else {
+        for (ServiceInfo serviceInfo : servicesOverview.getServices()) {
+          System.out.printf("\tService: %s -- %s\n", serviceInfo.getTitle(), serviceInfo.getState());
+        }
+      }
+    }
+  }
+```
+{% endcode %}
+
+Jednoduchá třída main bude obsahovat definici modelu a dvě metody ukazující sekvenční a paralelní získání hodnot:
+
+{% code lineNumbers="true" %}
+```java
+public class Program {
+
+  private static ServicesOverview servicesOverview;
+
+  public static void main(String[] args) {
+
+    printCurrent();
+
+    runInSequence();
+
+    System.out.println("Done");
+  }
+  
+  private static void printCurrent() { ... }
+}
+```
+{% endcode %}
+
+## Kontext
+
+Uvažujme jednoduchou sadu modelových tříd:
+
+* **ServiceOverview** - který obsahuje informace o zdroji a jednotlivých službách.
+* **ServiceInfo** - která obsahuje informace o službě - název a její stav.
+
+{% code lineNumbers="true" %}
+```java
+@Getter
+@Setter
+public class ServicesOverview {
+  private String source;
+  private String state;
+  private List<ServiceInfo> services;
+}
+```
+{% endcode %}
+
+{% code lineNumbers="true" %}
+```java
+@Getter
+@Setter
+public class ServiceInfo {
+  private String title;
+  private String state;
+}
+```
+{% endcode %}
+
+## Sekvenční získání hodnot
+
+Nejdříve demonstrujeme základní úlohu - budeme vlastně ukazovat kód nám vytvářené funkce `runInSequcence()`.&#x20;
+
+{% hint style="info" %}
+Aby se nám nepletly proměnné, budeme používat bloky pro omezení viditelnosti. V reálném příkladu, pokud bychom chtěli jít při programování tímto směrem, bychom samozřejmě využili funkce.
+{% endhint %}
+
+Nejdříve ukázka získání a vypsání obecných informací.
+
+{% code lineNumbers="true" %}
+```java
+    DataProvider dataProvider = new DataProvider();
+
+    {
+      var res = dataProvider.getServiceOverviewState();
+      servicesOverview = new ServicesOverview();
+      servicesOverview.setSource(res.source());
+      servicesOverview.setState(res.state());
+      printCurrent();
+    }
+```
+{% endcode %}
+
+Následně ukázka získání názvů všech služeb:
+
+{% code lineNumbers="true" %}
+```java
+    ...
+    {
+      var res = dataProvider.getServiceNames(servicesOverview.getSource());
+      var lst = res.stream().map(s -> {
+        ServiceInfo serviceInfo = new ServiceInfo();
+        serviceInfo.setTitle(s);
+        serviceInfo.setState("?");
+        return serviceInfo;
+      }).toList();
+      servicesOverview.setServices(lst);
+      printCurrent();
+    }
+```
+{% endcode %}
+
+A finálně ukázka získání stavů jednotlivých služeb:
+
+{% code lineNumbers="true" %}
+```java
+    ...
+    {
+      for (ServiceInfo serviceInfo : servicesOverview.getServices()) {
+        String res = dataProvider.getServiceState(serviceInfo.getTitle());
+        serviceInfo.setState(res);
+        printCurrent();
+      }
+    }
+```
+{% endcode %}
+
+... TODO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ```
 import lombok.Getter;
