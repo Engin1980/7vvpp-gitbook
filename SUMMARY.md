@@ -1,15 +1,15 @@
 # Table of contents
 
-* [Intro](README.md)
-* [Blokující fronta - Producent -> Konzument](blokujici-fronta-producent-greater-than-konzument.md)
+* [ToDo: Intro](README.md)
+* [ToDo: Blokující fronta - Producent -> Konzument](todo-blokujici-fronta-producent-greater-than-konzument.md)
 
 ## Běžné datové typy
 
-* [Lock](bezne-datove-typy/lock.md)
-* [Semaphore](bezne-datove-typy/semaphore.md)
-* [CountDownLatch](bezne-datove-typy/countdownlatch.md)
-* [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
-* [Phaser](bezne-datove-typy/phaser.md)
+* [ToDo: Lock](bezne-datove-typy/todo-lock.md)
+* [ToDo: Semaphore](bezne-datove-typy/todo-semaphore.md)
+* [ToDo: CountDownLatch](bezne-datove-typy/todo-countdownlatch.md)
+* [ToDo: CyclicBarrier](bezne-datove-typy/todo-cyclicbarrier.md)
+* [ToDo: Phaser](bezne-datove-typy/todo-phaser.md)
 
 ## Virtuální vlákna
 
@@ -27,5 +27,5 @@
 ## Neblokující přístupy
 
 * [Princip, CAS operace](neblokujici-pristupy/princip-cas-operace.md)
-* [Neblokující zásobník](neblokujici-pristupy/neblokujici-zasobnik.md)
+* [ToDo: Neblokující zásobník](neblokujici-pristupy/todo-neblokujici-zasobnik.md)
 * [False Sharing](neblokujici-pristupy/false-sharing.md)
