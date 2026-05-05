@@ -1,8 +1,80 @@
-# Lock
+# ToDo: Lock
 
-## Představení
+## Motivace
 
-...
+Téma Lock představuje základní stavební kámen souběžnosti v Javě. Zatímco `synchronized` je vestavěný mechanismus jazyka, balíček `java.util.concurrent.locks` nabízí nástroje pro jemnější a profesionálnější řízení přístupu ke sdíleným datům.
+
+V paralelním programování potřebujeme zajistit, aby se vlákna "nepoprala" o stejná data. Tradiční `synchronized` bloky jsou sice jednoduché, ale v produkčních systémech často narážejí na své limity – zejména nemožnost nastavit timeout nebo efektivně škálovat čtení. Dalším omezením je blokové pojetí `synchronized` - uzamčení i odemčení musí být v rámci jednoho bloku - nelze jej tedy "roztáhnout" mezi dvě funkce. Moderní Java zámky (Locks) tyto problémy řeší.
+
+#### Nemožnost nastavit timeout
+
+U klasického bloku `synchronized` platí pravidlo "všechno, nebo nic". Pokud vlákno narazí na zamčený monitor, vstoupí do stavu blokování a bude čekat neomezeně dlouho, dokud se zámek neuvolní. Programátor nemá žádný nástroj, jak toto čekání přerušit nebo omezit časem.
+
+V produkčním prostředí to znamená obrovské riziko. Pokud jedno vlákno uvízne v dlouhé operaci (například kvůli pomalému I/O nebo chybě v logice) a drží zámek, všechna ostatní vlákna, která se pokusí o stejnou operaci, se "nastohují" za ním. To vede k vyčerpání vláknového fondu a úplnému zamrznutí aplikace. Moderní `Lock` tento problém řeší metodou `tryLock(time, unit)`, která umožní vláknu říct: „Zkus se zamknout, ale pokud se to nepovede do 100 milisekund, vzdej to a pokračuj alternativní cestou.“
+
+#### Neefektivní škálování čtení
+
+Klíčové slovo `synchronized` vytváří takzvaný exkluzivní zámek (mutex). To znamená, že v danou chvíli může být v kritické sekci pouze jedno jediné vlákno, bez ohledu na to, co tam dělá.
+
+V mnoha aplikacích (jako je zmíněný `ConfigStore`) však vlákna data většinu času pouze čtou a nemění je. Z logického hlediska není důvod, proč by deset vláken nemohlo číst stejnou konfigurační hodnotu ve stejný okamžik. `synchronized` to však nepovolí – první čtenář zamkne dveře a druhý čtenář musí čekat venku, přestože by si navzájem do dat nezasahovali.
+
+Tento jev se nazývá seriální úzké hrdlo. Výkon aplikace se nezvyšuje s počtem jader procesoru, protože všechna vlákna musí projít stejným bodem postupně za sebou. Nástroje jako `ReadWriteLock` umožňují tento problém vyřešit tím, že dovolí neomezenému počtu čtenářů pracovat paralelně, a exkluzivitu vynutí až v okamžiku, kdy se objeví zapisovatel.
+
+#### Blokové omezení `synchronized`
+
+Klíčové slovo `synchronized` je pevně svázáno s blokem kódu nebo tělem metody, což vytváří takzvanou strukturovanou synchronizaci; zámek se automaticky získá při vstupu do bloku a automaticky uvolní při jeho opuštění. To sice zvyšuje bezpečnost proti zapomenutému odemčení, ale znemožňuje to pokročilejší logiku, kdy potřebujeme zámek získat v jedné metodě a uvolnit jej až v metodě úplně jiné. Rozhraní `Lock` naproti tomu nabízí nestrukturované zamykání, které umožňuje rozdělit proces získání a uvolnění zámku do různých částí kódu. Díky tomu lze realizovat například řetězové zamykání (hand-over-hand locking) v datových strukturách typu spojový seznam, kde vlákno získá zámek pro další uzel dříve, než uvolní zámek uzlu předchozího, což je s blokovou strukturou `synchronized` technicky nerealizovatelné.
+
+#### Shrnutí dopadů
+
+Pokud systém neumí timeouty a škálování čtení:
+
+1. Latence: I jednoduchý dotaz na konfiguraci může trvat sekundy, pokud právě probíhá zápis.
+2. Propustnost: Server zvládne jen zlomek požadavků, protože procesor tráví většinu času přepínáním zablokovaných vláken místo reálné práce.
+3. Stabilita: Systém je náchylný k řetězové havárii (cascading failure) – jedno pomalé vlákno postupně zastaví všechna ostatní.
+4. Omezení při tvorbě kódu: Určité relativně jednoduché úlohy nelze vůbec realizovat, nebo je lze realizovat jen za pomocí obezliček komplikujících přehlednost a efektivnost kódu.
+
+## Implementace
+
+### Rozhraní Lock
+
+Základním stavebním kamenem v Javě je rozhraní `java.util.concurrent.locks.Lock`. Reprezentuje abstrakci obecného zámku umožňujícího omezení přístupu ke zdroji.
+
+Základní operace rozhraní `Lock` umožňují jemné řízení přístupu:
+
+* `lock()`: Tato operace získá zámek, nebo zablokuje aktuální vlákno, dokud zámek není k dispozici. Je to nejbližší ekvivalent k `synchronized`.
+* `unlock()`: Uvolní zámek. Pokud vlákno získalo zámek vícekrát (reentrance), musí jej stejný početkrát uvolnit, aby byl dostupný pro ostatní.
+* `tryLock()`: Pokusí se získat zámek okamžitě. Pokud je volný, vrátí `true`, v opačném případě ihněď vrací `false`, čímž dává vláknu možnost vykonat náhradní logiku místo čekání.
+* `tryLock(long time, TimeUnit unit)`: Pokročilá varianta, která čeká na získání zámku pouze po zadaný časový interval. Pokud se zámek nepodaří získat včas, operace se ukončí.
+* `lockInterruptibly()`: Získá zámek, ale na rozdíl od standardního `lock()` umožní vláknu reagovat na signál přerušení (`interrupt`), což je zásadní pro korektní ukončování úloh.
+
+### Třída ReentrantLock
+
+Nejpoužívanější implementací tohoto rozhraní je třída `ReentrantLock`. Přívlastat „reentrantní“ znamená, že pokud vlákno již zámek drží, může jej opakovaně získat (například při rekurzivním volání nebo volání jiné metody téže třídy), aniž by se samo zablokovalo. `ReentrantLock` navíc umožňuje volitelný režim spravedlnosti (fairness), kde při nastavení na `true` garantuje, že zámek získá vlákno, které na něj čeká nejdéle. Na rozdíl od `synchronized` bloků se u explicitních zámků musí programátor starat o uvolnění, což se standardně provádí v bloku `finally`.&#x20;
+
+Platí, že zámek musí uvolňovat to vlákno, které jej  uzamčelo. Navíc, pokud stejné vlákno uzamklo zámek několikrát (což může, protože _reentrant_), tak jej musí odemknout ve stejném počtu.
+
+### Rozhraní ReadWriteLock
+
+V systémech, kde operace čtení výrazně převažují nad zápisy, se standardní exkluzivní zámky stávají úzkým hrdlem, protože nutí čtenáře přistupovat k datům postupně jeden po druhém. Hlavní motivací pro zavedení `ReadWriteLock` je umožnit maximální paralelizaci čtení. Zatímco u běžného zámku (`ReentrantLock`) blokuje jeden čtenář všechny ostatní, `ReadWriteLock` vychází z logiky, že čtení dat je bezpečná operace, která nemění stav, a proto může probíhat v mnoha vláknech současně. Cílem je zvýšit propustnost aplikace tím, že se exkluzivita vynucuje pouze v okamžiku, kdy je potřeba data modifikovat, čímž se předchází zbytečnému čekání v situacích, kdy nedochází ke konfliktům.
+
+Rozhraní `java.util.concurrent.locks.ReadWriteLock` definuje dvojici zámků: jeden pro čtení (`readLock()`) a druhý pro zápis (`writeLock()`). Nejpoužívanější implementací je `ReentrantReadWriteLock`. Tento mechanismus se řídí specifickými pravidly: zámek pro čtení může držet libovolný počet vláken najednou, pokud právě nikdo nezapisuje. Zámek pro zápis je však striktně exkluzivní – pokud vlákno zapisuje, žádné jiné vlákno nesmí číst ani zapisovat. Implementace navíc podporuje tzv. reentranci, takže vlákno držící zámek pro zápis může získat i zámek pro čtení (downgrade), ale opačný postup (upgrade z čtení na zápis) není přímo povolen, aby se předešlo deadlockům.
+
+Klasickou implementací tohoto rozhraní je `ReentrantReadWriteLock`.
+
+#### Základní operace
+
+Na rozdíl od ostatních zámků, práce s tímto rozhraním vyžaduje volání specifických metod pro každý typ operace:
+
+* `readLock().lock()`: Získá zámek pro čtení. Pokud jiná vlákna drží zámek pro čtení, operace proběhne okamžitě. Pokud však jiné vlákno právě zapisuje, čtenář se zablokuje.
+* `readLock().unlock()`: Uvolní zámek pro čtení. Je nutné jej volat v bloku `finally` stejně jako u běžných zámků.
+* `writeLock().lock()`: Získá exkluzivní zámek pro zápis. Vlákno musí počkat, dokud všechna vlákna (čtenáři i zapisovatelé) zámek neuvolní.
+* `readLock().tryLock(long time, TimeUnit unit)`: Umožňuje pokusit se o čtení s časovým limitem, což je klíčové pro udržení responzivity systému při dlouhotrvajících zápisech.
+
+### Třída StampedLock
+
+Hlavní motivací pro vznik `StampedLock` byla snaha o dosažení maximálního výkonu prostřednictvím takzvaného optimistického čtení. Tento přístup vychází z předpokladu, že ke konfliktu mezi čtením a zápisem dochází v praxi jen zřídka. Namísto blokování ostatních vláken si čtenář pouze vyzvedne číselný lístek (razítko) a přečte data bez jakéhokoliv zamykání. Teprve po dokončení čtení ověří, zda je jeho razítko stále platné, což z něj činí ideální nástroj pro jemně laděné komponenty citlivé na latenci, kde by standardní zamykání představovalo zbytečnou brzdu.
+
+Třída `java.util.concurrent.locks.StampedLock` se od ostatních zámků liší tím, že není reentrantní, což znamená, že vlákno nemůže získat stejný zámek opakovaně bez rizika uváznutí. Vnitřně nepracuje s objekty zámků, ale vrací hodnotu typu `long`, která slouží jako unikátní identifikátor stavu (razítko). Implementace nabízí tři režimy přístupu: exkluzivní zápis, pesimistické čtení (podobné `ReadWriteLock`) a unikátní optimistické čtení. Vývojář musí při použití optimistického režimu explicitně implementovat validaci razítka a v případě neúspěchu zvolit náhradní strategii, například opakování pokusu nebo přechod na těžší, pesimistický zámek.
 
 ## Příklad
 
@@ -21,7 +93,7 @@ Typické vlastnosti a požadavky na takovou komponentu jsou:
 
 Následující sekce vysvětlují jednotlivé přístupy, které lze při řešení v Java využít.
 
-## Implementace příkladu přes 'synchronized'
+### Implementace příkladu přes 'synchronized'
 
 Přístup přes `synchronized` řeší souběžný přístup ke sdíleným datům tím, že serializuje všechny operace pomocí jednoho implicitního zámku, bez možnosti řídit čekání, latenci nebo fallback chování.
 
@@ -65,72 +137,16 @@ public class ConfigStore {
 
 ```
 
-### Co to **splňuje**
+Výhody:
 
-✅ **správnost**
+* správnost - data jsou konzistentní, nevznikají race conditions
+* jednoduchost - minimum kódu, snadno čitelné
 
-* data jsou konzistentní
-* žádné race conditions
+Nevýhody:
 
-✅ **jednoduchost**
-
-* minimum kódu
-* snadno čitelné
-
-***
-
-### Co to **NEUMÍ** (a to je zásadní)
-
-#### 1️⃣ ŽÁDNÝ timeout
-
-Když probíhá `reload()`:
-
-Plain TextThread A: reload (1 s)\
-Thread B: get() → čeká\
-Thread C: get() → čeká\
-Thread D: get() → čeká\
-...\
-\`\`\
-Zobrazit více řádků
-
-➡️ **čekají všichni** ➡️ **neomezeně dlouho** ➡️ **žádná kontrola latence**
-
-Tohle:
-
-* je OK v učebnici
-* ❌ **špatně v serverech / backendu**
-
-***
-
-#### 2️⃣ ŽÁDNÝ fallback
-
-Se `synchronized` **nelze říct**:
-
-> „když to nejde teď hned, vrať default“
-
-Thread:
-
-* buď:
-  * projde
-* nebo:
-  * čeká nekonečně dlouho
-
-➡️ žádná degradace služby\
-➡️ risk thread starvation
-
-***
-
-#### 3️⃣ Všechno je seriální
-
-I čtení:
-
-Javasynchronized get(...)\
-\`\`\
-Zobrazit více řádků
-
-* čtenář blokuje čtenáře
-* nulová paralelizace
-* špatná škálovatelnost
+* žádné omezení doby čekání - pokud se bude dlouho čekat při updatu dat, všichni čtenáři čekají do dokončení operace -> thread starvation
+* žádný fallback - buď se to zamkne, nebo se čeká, žádné podmíněné vyhodnocení -> degradace služby, thread startvation
+* zbytečné blokování - čtenáři se blokuji navzájem, žádná paralelizace, špatná škálovatelnost
 
 ## Implementace příkladu přes ReentrantLock
 
@@ -195,87 +211,14 @@ public class ConfigStore {
 }
 ```
 
-### Proč je to **architektonicky správně**
+Výhody:
 
-1️⃣ `tryLock(timeout)` = řízení latency
+* timeout při nedostupnosti po stanovený interval
+* po timeoutu možnost získat default hodnotu
 
-Javalock.tryLock(timeout, unit)\
-Zobrazit více řádků
+Nevýhody:
 
-* **nikdy nečekáš donekonečna**
-* thread:
-  * buď rychle čte
-  * nebo se rozhodne „kašlu na config“
-
-To je **zásadní vlastnost v serverech**.
-
-***
-
-#### 2️⃣ Graceful degradation
-
-Když probíhá reload:
-
-* některé requesty:
-  * dostanou default
-  * systém pořád běží
-* lepší než:
-  * thread starvation
-  * cascading timeouty
-
-***
-
-#### 3️⃣ Tohle `synchronized` neumí
-
-Se `synchronized`:
-
-Javasynchronized String get(...) {\
-// čekáš navždy\
-}\
-Zobrazit více řádků
-
-* ❌ žádný timeout
-* ❌ žádná alternativa
-* ❌ žádná kontrola latence
-
-➡️ **nevhodné pro produkci**
-
-***
-
-### Chování v běhu (reálně)
-
-```
-Thread A: reload config (1s)
-Thread B: getOrDefault → timeout 50 ms → default
-Thread C: getOrDefault → timeout 50 ms → default
-Thread D: getOrDefault → získá lock po reloadu
-```
-
-➡️ aplikace **nepřestane odpovídat**
-
-***
-
-### Důležité poznámky
-
-#### ✅ Fair lock
-
-Javanew ReentrantLock(true)\
-Zobrazit více řádků
-
-* lepší predikovatelnost
-* žádné hladovění
-* vhodné pro config / infra věci
-
-(Mírně horší throughput – akceptovatelné)
-
-***
-
-#### ⚠️ Co by šlo zlepšit (vědomě neřešeno)
-
-* read‑heavy scénář by byl lepší s:
-  * `StampedLock` (optimistic read)
-* ale:
-  * tady **chceme timeout**
-  * `StampedLock` neumí timeout pro optimistic read
+* čtenáři se blokují navzájem a přitom se neovlivňují
 
 ## Implementace příkladu přes StampedLock
 
@@ -337,51 +280,15 @@ public class ConfigStoreStamped {
 }
 ```
 
-### Co je tady důležité (a proč je to **smysluplné**)
+Výhody:
 
-#### 1️⃣ `tryOptimisticRead()` **neblokuje**
+* okamžité získání hodnoty (optimistic read)
+* žádné blokování, žádné timeouty, nemůže vzniknout deadlock
+* zachovaná konzistence dat
 
-Javalong stamp = lock.tryOptimisticRead();\
-\`\`\
-Zobrazit více řádků
+Nevýhody:
 
-* žádný mutex
-* žádný wait
-* jen čtení paměti
-
-➡️ **ideální pro read‑heavy scénáře**
-
-***
-
-#### 2️⃣ `validate(stamp)` = kontrola konzistence
-
-Javaif (!lock.validate(stamp)) {\
-return defaultValue;\
-}\
-Zobrazit více řádků
-
-* pokud během čtení:
-  * někdo získal **write lock**
-* stamp se zneplatní
-* data **mohla být nekonzistentní**
-
-➡️ **okamžitý fallback**
-
-***
-
-#### 3️⃣ Žádné blokování = žádné timeouty
-
-To je **zásadní rozdíl** oproti `ReentrantLock`.
-
-* u `StampedLock`:
-  * **nečekáš**
-  * **nerozhoduje čas**
-  * rozhoduje **konflikt**
-
-To je:
-
-* extrémně rychlé
-* ideální pro vysoký throughput
+* při extrémně častých zápisech neustálé opakované čtení
 
 ## Implementace příkladu přes ReadWriteLock
 
@@ -450,65 +357,15 @@ public class ConfigStore {
 }
 ```
 
-### Proč je to **smysluplné** řešení
+Výhody:
 
-#### 1️⃣ Paralelní čtení
+* paralelní čtení, extrémně efektivní při řídkém zápisu
+* konzistence
+* timeout při čtení, náhrada výchozí hodnotou
 
-* více readerů může:
-  * vstoupit **současně**
-  * bez vzájemného blokování
-* writer:
-  * blokuje nové čtení
-  * počká, až staré doběhnou
+Nevýhody:
 
-➡️ mnohem lepší než jeden `synchronized` mutex
-
-***
-
-#### 2️⃣ Timeout na čtení
-
-Javalock.readLock().tryLock(timeoutMs, MILLISECONDS)\
-Zobrazit více řádků
-
-* **kontrola latence**
-* žádný thread:
-  * nečeká nekonečně
-* při problému:
-  * vrátíš default
-  * systém zůstane responsivní
-
-✅ **tohle `synchronized` neumí**
-
-***
-
-#### 3️⃣ Graceful degradation
-
-Reálný běh:
-
-```
-Thread A: reload (drží write lock 1s)
-Thread B: getOrDefault(timeout=50ms) → default
-Thread C: getOrDefault(timeout=50ms) → default
-Thread D: getOrDefault(timeout=50ms) → default
-```
-
-➡️ aplikace pořád odpovídá\
-➡️ žádné hromadění threadů
-
-### Kdy je `ReadWriteLock` správná volba
-
-✅ když:
-
-* máš **read‑heavy** data
-* chceš **timeout**
-* potřebuješ **konzistentní čtení**
-* nechceš optimistiku (`StampedLock`)
-
-❌ když:
-
-* čtení je krátké a vzácné
-* nebo je zápis častý
-* nebo ti nevadí blokování
+* větší režie a obecně čtení pomalejší než `StampedLock`
 
 ## Příklad - shrnutí
 
@@ -552,6 +409,10 @@ Významy řádků:
 
 ## Bonus - Implementace přes CAS/neblokující
 
+{% hint style="info" %}
+Více pro info ohledně CAS viz [princip-cas-operace.md](../neblokujici-pristupy/princip-cas-operace.md "mention").
+{% endhint %}
+
 Přístup přes CAS (Compare‑And‑Swap) řeší synchronizaci tím, že atomicky vyměňuje celý stav bez zámků, takže čtení ani zápisy nikdy neblokují a systém má konstantní, predikovatelnou latenci.
 
 * Řeší problém synchronizace **úplným odstraněním zámků**.
@@ -594,38 +455,36 @@ public class ConfigStore {
 }
 ```
 
-### Proč je to **opravdu non‑blocking**
+Výhody:
 
-#### Čtení
+* neblokující přístup, nikdy se nečeká
+* zachovaná konzistence
+* rychlé, nepracuje se se zamykáním
 
-* ✅ žádný lock
-* ✅ žádný CAS
-* ✅ jen volatile read reference
-* O(1), konstantní latence
+Nevýhody:
 
-#### Zápis
+* nepřehlednější kód
 
-* ✅ jeden atomický store reference
-* žádné blokování čtenářů
-* žádná synchronizace mezi čtením a zápisem
+### CAS
 
-➡️ **readers nikdy nečekají**
+CAS operace je reprezentována objektem `AtomicReference` a jehe metodou `set()`, která je atomická, tedy z pohledu JWM:
 
-***
+* garantovaná atomicita
+* **happens‑before** kontrakt mezi zapisovatelem a čtenářem
 
-### Kde je CAS?
+{% hint style="info" %}
+**Happens-before** kontrakt slouží jako záruka, že pokud operace A "předchází" operaci B, pak výsledek operace A musí být pro operaci B viditelný.
 
-* `AtomicReference.set()` je **atomic store**
-* z pohledu JVM je to:
-  * garantovaná atomicita
-  * **happens‑before** mezi writerem a čtenářem
-* pokud bys řešil **konfliktní zápisy**, použiješ `compareAndSet`
+Hlavním problémem souběžnosti není jen to, že dvě vlákna mohou měnit data naráz, ale především to, že zápis provedený jedním vláknem nemusí být pro druhé vlákno okamžitě viditelný. Procesory mají vlastní vyrovnávací paměti (L1, L2, L3 cache), a pokud není vynucena synchronizace těchto dat, vlákno může pracovat s kopií, která neodpovídá hlavní paměti/stavu cache v jiného jádra procesoru.
+{% endhint %}
 
-***
+Je tedy garantováno, že po provedení zápisu všechna vlákna vidí nově vložené hodnoty.
 
-### Varianta s explicitním `compareAndSet` (více writerů)
+### Varianta s explicitním `compareAndSet`
 
-Pokud bys **musel řešit souběžné reloady**:
+Ve výše uvedeném příkladu, kdy nahrazujeme celý slovník, je tato varianta bezpečná i tehdy, když bude zápis provádět více zapisujících vláken, protože každé vlákno nahrazuje celý původní set za nový.
+
+Pokud bychom však potřebovali držet konzistenci stavů a volání mezi objekty (např. zapisovatl by objekt načetl, provedl drobné změny s vytvořením nového objektu a ten by pak chtěl podstrčit za původní objekt), nebylo by garantováno, že mu někdo neprovedl další změny v původním objektu mezi jeho načtením a aktualizací dat. V takovém případě bychom potřebovali ještě ochranu garantující, že nahrazujeme takový objekt, který čekáme (ze kterého jsme původně vycházeli). Pro toto použití je funkce `compareAndSet()`.
 
 ```java
 public void reload(Map<String, String> newConfig) {
@@ -633,6 +492,7 @@ public void reload(Map<String, String> newConfig) {
 
     while (true) {
         Map<String, String> current = config.get();
+        // nějaké změny
         if (config.compareAndSet(current, snapshot)) {
             return;
         }
@@ -647,43 +507,8 @@ Toto řešení je:
 * retry jen při souběhu writerů
 * readers pořád 100 % non‑blocking
 
-#### Výhody
-
-* ✅ deterministickou latenci
-* ✅ žádné deadlocky
-* ✅ žádné starvation
-* ✅ škáluje perfektně s počtem čtenářů
-* ✅ jednoduchá mentální model
-
-#### Nevýhody
-
-* ❌ zápis je „výměna celého stavu“
-* ❌ při reloadu:
-  * nové objekty
-  * krátký GC tlak
-* ❌ nelze dělat „postupné zápisy“
-
-***
-
-### Kdy je tohle **nejlepší možné řešení**
-
-✅ konfigurace\
-✅ feature flags\
-✅ routing rules\
-✅ in‑memory metadata\
-✅ read‑mostly data\
-✅ systémy s nízkou tolerancí latence
-
 Ve většině backendů je toto lepší než jakýkoliv přístup postavený nad zámky.
 
-***
+### Srovnání CAS s předchozími řešeními
 
-### Srovnání s předchozími řešeními
-
-| Kritérium       | Locky    | CAS snapshot        |
-| --------------- | -------- | ------------------- |
-| Blokování       | ano      | ❌                   |
-| Latence         | proměnná | konstantní          |
-| Komplexita      | vyšší    | nižší               |
-| Read throughput | omezený  | prakticky neomezený |
-| Deadlock risk   | ano      | ❌                   |
+<table><thead><tr><th width="233">Kritérium</th><th width="235">Locky</th><th width="216">CAS snapshot</th></tr></thead><tbody><tr><td>Blokování</td><td>ano</td><td>❌</td></tr><tr><td>Latence</td><td>proměnná</td><td>konstantní</td></tr><tr><td>Komplexita</td><td>vyšší</td><td>nižší</td></tr><tr><td>Read throughput</td><td>omezený</td><td>prakticky neomezený</td></tr><tr><td>Deadlock risk</td><td>ano</td><td>❌</td></tr></tbody></table>

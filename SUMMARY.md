@@ -3,6 +3,10 @@
 * [ToDo: Intro](README.md)
 * [ToDo: Blokující fronta - Producent -> Konzument](todo-blokujici-fronta-producent-greater-than-konzument.md)
 
+## Koncepty
+
+* [Happens-Before kontrakt](koncepty/happens-before-kontrakt.md)
+
 ## Běžné datové typy
 
 * [ToDo: Lock](bezne-datove-typy/todo-lock.md)
