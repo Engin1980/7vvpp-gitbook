@@ -9,7 +9,7 @@
 * [Semaphore](bezne-datove-typy/semaphore.md)
 * [CountDownLatch](bezne-datove-typy/todo-countdownlatch.md)
 * [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
-* [ToDo: Phaser](bezne-datove-typy/todo-phaser.md)
+* [Phaser](bezne-datove-typy/phaser.md)
 
 ## Virtuální vlákna
 
