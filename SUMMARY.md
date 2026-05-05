@@ -7,7 +7,7 @@
 
 * [ToDo: Lock](bezne-datove-typy/todo-lock.md)
 * [Semaphore](bezne-datove-typy/semaphore.md)
-* [ToDo: CountDownLatch](bezne-datove-typy/todo-countdownlatch.md)
+* [CountDownLatch](bezne-datove-typy/countdownlatch.md)
 * [ToDo: CyclicBarrier](bezne-datove-typy/todo-cyclicbarrier.md)
 * [ToDo: Phaser](bezne-datove-typy/todo-phaser.md)
 
