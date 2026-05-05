@@ -6,7 +6,7 @@
 ## Běžné datové typy
 
 * [ToDo: Lock](bezne-datove-typy/todo-lock.md)
-* [ToDo: Semaphore](bezne-datove-typy/todo-semaphore.md)
+* [Semaphore](bezne-datove-typy/semaphore.md)
 * [ToDo: CountDownLatch](bezne-datove-typy/todo-countdownlatch.md)
 * [ToDo: CyclicBarrier](bezne-datove-typy/todo-cyclicbarrier.md)
 * [ToDo: Phaser](bezne-datove-typy/todo-phaser.md)
