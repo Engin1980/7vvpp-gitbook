@@ -9,7 +9,7 @@
 
 ## Běžné datové typy
 
-* [ToDo: Lock](bezne-datove-typy/todo-lock.md)
+* [Lock](bezne-datove-typy/lock.md)
 * [Semaphore](bezne-datove-typy/semaphore.md)
 * [CountDownLatch](bezne-datove-typy/todo-countdownlatch.md)
 * [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
