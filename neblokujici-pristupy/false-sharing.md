@@ -38,7 +38,7 @@ Dříve se to řešilo šílenými hacky, kdy programátoři mezi dvě důležit
 
 Od Javy 8 (nyní však pouze pro interní potřeby JDK) existuje řešení anotací `@Contended`, kdy JVM automaticky přidá kolem daného pole dostatečný padding (vycpávku), aby se zaručilo, že bude v samostatné Cache Line. Anotace je však dnes pouze po vnitřní potřebu JVM a navrhují se jiné způsoby.
 
-```
+```java
 public class OptimisedCounters {
     @jdk.internal.vm.annotation.Contended
     public long counter1;
