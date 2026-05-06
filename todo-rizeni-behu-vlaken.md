@@ -106,3 +106,12 @@ Jakmile probuzené vlákno $W znovu získá zámek (nebo všechny, pokud jich po
 Uvažujme příklad, kdy produkční vlákna provádějí nějaké výpisy do bufferu. Druhé vlákno čeká na nashromáždění určitého minimálního počtu výpisů a teprve ve skupince je zobrazí uživateli najednou.
 
 TODO
+
+
+
+### Schéma
+
+Následující schémata ukazují sekvenci operací, jak se provádějí za sebou.
+
+
+
