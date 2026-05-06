@@ -14,6 +14,7 @@
 * [CountDownLatch](bezne-datove-typy/todo-countdownlatch.md)
 * [CyclicBarrier](bezne-datove-typy/cyclicbarrier.md)
 * [Phaser](bezne-datove-typy/phaser.md)
+* [Kolekce - blokovací fronta](bezne-datove-typy/kolekce-blokovaci-fronta.md)
 
 ## Virtuální vlákna
 
