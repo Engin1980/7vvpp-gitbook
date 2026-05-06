@@ -2,6 +2,7 @@
 
 * [ToDo: Intro](README.md)
 * [ToDo: Blokující fronta - Producent -> Konzument](todo-blokujici-fronta-producent-greater-than-konzument.md)
+* [TODO: Řízení běhu vláken](todo-rizeni-behu-vlaken.md)
 
 ## Koncepty
 
