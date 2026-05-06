@@ -113,5 +113,22 @@ TODO
 
 Následující schémata ukazují sekvenci operací, jak se provádějí za sebou.
 
+![a](_imgs/_wait1.png)
+
+![a](_imgs/_wait2.png)
+
+![a](_imgs/_wait3.png)
+
+![a](_imgs/_wait4.png)
+
+![a](_imgs/_wait5.png)
+
+![a](_imgs/_wait6.png)
+
+![a](_imgs/_wait7.png)
+
+![a](_imgs/_wait8.png)
+
+![a](_imgs/_wait9.png)
 
 
